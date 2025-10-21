@@ -82,6 +82,8 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
     tables_count = 0
     dax_measures_count = 0
     columns_count = 0
+    has_incremental_refresh = "No"
+    has_row_level_security = "No"
     
     if model is not None:
         try:
@@ -120,6 +122,32 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
             columns_count = len(statistics_df) if not statistics_df.empty else 0
         except Exception:
             columns_count = 0
+            
+        try:
+            # Check for Incremental Refresh (RangeStart parameter)
+            m_parameters_df = getattr(model, 'm_parameters', pd.DataFrame())
+            if not m_parameters_df.empty:
+                # Try different possible column names for parameter names
+                name_col = None
+                for col_name in ['ParameterName', 'Name', 'Parameter']:
+                    if col_name in m_parameters_df.columns:
+                        name_col = col_name
+                        break
+                
+                if name_col:
+                    # Check if any parameter name contains 'RangeStart'
+                    if m_parameters_df[name_col].astype(str).str.contains('RangeStart', case=False, na=False).any():
+                        has_incremental_refresh = "Yes"
+        except Exception:
+            pass
+            
+        try:
+            # Check for Row-Level Security (RLS)
+            rls_df = getattr(model, 'rls', pd.DataFrame())
+            if not rls_df.empty:
+                has_row_level_security = "Yes"
+        except Exception:
+            pass
 
     # Filters count
     total_filters = 0
@@ -146,6 +174,8 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
             'Tables': tables_count,
             'DAX Measures': dax_measures_count,
             'Columns': columns_count,
+            'Incremental Refresh?': has_incremental_refresh,
+            'Row Level Security': has_row_level_security,
         }
     ])
 
@@ -350,6 +380,21 @@ def process_single_file(uploaded_file):
         if search_text and len(filtered_df) < len(summaries['visual_summary']):
             st.caption(f"Showing {len(filtered_df)} of {len(summaries['visual_summary'])} rows")
 
+    # 11. Row-Level Security (RLS)
+    if model is not None:
+        try:
+            rls_df = getattr(model, 'rls', pd.DataFrame())
+            if not rls_df.empty:
+                st.subheader("Row-Level Security (RLS)")
+                filtered_df = filter_dataframe_by_text(rls_df, search_text)
+                st.dataframe(filtered_df, hide_index=True, width="stretch")
+                if search_text and len(filtered_df) < len(rls_df):
+                    st.caption(f"Showing {len(filtered_df)} of {len(rls_df)} rows")
+            else:
+                st.info("No Row-Level Security found.")
+        except Exception:
+            st.info("Row-Level Security not available.")
+
     # Export All Sheets Button
     st.divider()
     export_buffer = io.BytesIO()
@@ -437,6 +482,15 @@ def process_single_file(uploaded_file):
         # Sheet 10: Visual Summary
         if summaries and not summaries['visual_summary'].empty:
             summaries['visual_summary'].to_excel(writer, index=False, sheet_name='Visual Summary')
+        
+        # Sheet 11: Row-Level Security (RLS)
+        if model is not None:
+            try:
+                rls_df = getattr(model, 'rls', pd.DataFrame())
+                if not rls_df.empty:
+                    rls_df.to_excel(writer, index=False, sheet_name='Row-Level Security')
+            except Exception:
+                pass
     
     st.download_button(
         label="📥 Download Complete Analysis (Excel)",
