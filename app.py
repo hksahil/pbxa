@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 from src.report import extract_report_metadata
+from src.utils import filter_dataframe_by_text
 
 try:
     from pbixray.core import PBIXRay
@@ -206,7 +207,7 @@ def process_single_file(uploaded_file):
     else:
         st.warning("pbixray is not installed; showing extractor-based summaries only.")
 
-    # 1. Report Summary (first)
+    # 1. Report Summary (first) - NO FILTERING
     st.subheader("Report Summary")
     summaries = build_report_summaries(uploaded_file, model)
     if summaries:
@@ -214,12 +215,29 @@ def process_single_file(uploaded_file):
     else:
         st.info("Could not extract report summary from the PBIX file.")
 
+    # Add global text filter below Report Summary
+    st.divider()
+    st.markdown("### 🔍 Filter All Tables Below")
+    search_text = st.text_input(
+        "Search across all tables/dataframes:",
+        placeholder="Enter text to filter all rows in tables below...",
+        help="This will filter all tables below based on your search text (case-insensitive)"
+    )
+    
+    if search_text:
+        st.info(f"🔎 Filtering all tables below for: '{search_text}'")
+    
+    st.divider()
+
     # 2. Table Analysis
     if model is not None:
         try:
             if getattr(model, 'power_query', pd.DataFrame()).size:
                 st.subheader("Table Analysis")
-                st.dataframe(model.power_query)
+                filtered_df = filter_dataframe_by_text(model.power_query, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(model.power_query):
+                    st.caption(f"Showing {len(filtered_df)} of {len(model.power_query)} rows")
             else:
                 st.info("No Table Analysis found.")
         except Exception:
@@ -230,7 +248,10 @@ def process_single_file(uploaded_file):
         try:
             if getattr(model, 'relationships', pd.DataFrame()).size:
                 st.subheader("Relationships Analysis")
-                st.dataframe(model.relationships)
+                filtered_df = filter_dataframe_by_text(model.relationships, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(model.relationships):
+                    st.caption(f"Showing {len(filtered_df)} of {len(model.relationships)} rows")
             else:
                 st.info("No Relationships found.")
         except Exception:
@@ -240,7 +261,11 @@ def process_single_file(uploaded_file):
     if model is not None:
         try:
             st.subheader("Column Analysis")
-            st.dataframe(getattr(model, 'statistics', pd.DataFrame()))
+            statistics_df = getattr(model, 'statistics', pd.DataFrame())
+            filtered_df = filter_dataframe_by_text(statistics_df, search_text)
+            st.dataframe(filtered_df)
+            if search_text and len(filtered_df) < len(statistics_df):
+                st.caption(f"Showing {len(filtered_df)} of {len(statistics_df)} rows")
         except Exception:
             st.info("Column Analysis not available.")
 
@@ -249,7 +274,10 @@ def process_single_file(uploaded_file):
         try:
             if getattr(model, 'm_parameters', pd.DataFrame()).size:
                 st.subheader("M Parameters")
-                st.dataframe(model.m_parameters)
+                filtered_df = filter_dataframe_by_text(model.m_parameters, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(model.m_parameters):
+                    st.caption(f"Showing {len(filtered_df)} of {len(model.m_parameters)} rows")
             else:
                 st.info("No M Parameters found.")
         except Exception:
@@ -260,7 +288,10 @@ def process_single_file(uploaded_file):
         try:
             if getattr(model, 'dax_tables', pd.DataFrame()).size:
                 st.subheader("DAX Tables")
-                st.dataframe(model.dax_tables)
+                filtered_df = filter_dataframe_by_text(model.dax_tables, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(model.dax_tables):
+                    st.caption(f"Showing {len(filtered_df)} of {len(model.dax_tables)} rows")
             else:
                 st.info("No DAX Tables found.")
         except Exception:
@@ -280,7 +311,10 @@ def process_single_file(uploaded_file):
             
             if calculated_cols is not None and calculated_cols.size > 0:
                 st.subheader("Calculated Columns")
-                st.dataframe(calculated_cols)
+                filtered_df = filter_dataframe_by_text(calculated_cols, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(calculated_cols):
+                    st.caption(f"Showing {len(filtered_df)} of {len(calculated_cols)} rows")
             else:
                 st.info("No Calculated Columns found.")
         except Exception as e:
@@ -291,7 +325,10 @@ def process_single_file(uploaded_file):
         try:
             if getattr(model, 'dax_measures', pd.DataFrame()).size:
                 st.subheader("DAX Measures")
-                st.dataframe(model.dax_measures)
+                filtered_df = filter_dataframe_by_text(model.dax_measures, search_text)
+                st.dataframe(filtered_df)
+                if search_text and len(filtered_df) < len(model.dax_measures):
+                    st.caption(f"Showing {len(filtered_df)} of {len(model.dax_measures)} rows")
             else:
                 st.info("No DAX measures found.")
         except Exception:
@@ -300,12 +337,18 @@ def process_single_file(uploaded_file):
     # 9. Page Summary
     if summaries:
         st.subheader("Page Summary")
-        st.dataframe(summaries['page_summary'], hide_index=True, width="stretch")
+        filtered_df = filter_dataframe_by_text(summaries['page_summary'], search_text)
+        st.dataframe(filtered_df, hide_index=True, width="stretch")
+        if search_text and len(filtered_df) < len(summaries['page_summary']):
+            st.caption(f"Showing {len(filtered_df)} of {len(summaries['page_summary'])} rows")
 
     # 10. Visual Summary
     if summaries:
         st.subheader("Visual Summary")
-        st.dataframe(summaries['visual_summary'], hide_index=True, width="stretch")
+        filtered_df = filter_dataframe_by_text(summaries['visual_summary'], search_text)
+        st.dataframe(filtered_df, hide_index=True, width="stretch")
+        if search_text and len(filtered_df) < len(summaries['visual_summary']):
+            st.caption(f"Showing {len(filtered_df)} of {len(summaries['visual_summary'])} rows")
 
     # Export All Sheets Button
     st.divider()

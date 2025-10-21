@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from src.report import extract_report_metadata
+from src.utils import filter_dataframe_by_text
 import io
 import json
 import os
@@ -173,6 +174,20 @@ def display_report_data(report_data, report_name="Report"):
         st.warning(f"⚠️ No visuals with data projections found in {report_name}.")
         return
     
+    # Add global text filter
+    st.markdown("### 🔍 Filter All Data")
+    search_text = st.text_input(
+        "Search across all data in this report:",
+        placeholder="Enter text to filter all rows...",
+        help="This will filter all data tables below based on your search text (case-insensitive)",
+        key=f"global_search_{report_name}"
+    )
+    
+    if search_text:
+        st.info(f"🔎 Filtering all data for: '{search_text}'")
+    
+    st.divider()
+    
     summary = report_data.get("summary", {})
     pages = report_data.get("pages", [])
     visuals = report_data.get("visuals", [])
@@ -203,9 +218,12 @@ def display_report_data(report_data, report_name="Report"):
             # Reorder columns per requested order (keep Page Name first)
             desired_order = ['Page Name', 'All Elements', 'Slicers', 'Static Elements', 'Visual Count', 'Page Filters', 'Groups']
             display_df = df_pages.reindex(columns=[c for c in desired_order if c in df_pages.columns])
+            
+            # Apply text filter
+            filtered_display_df = filter_dataframe_by_text(display_df, search_text)
 
             st.dataframe(
-                display_df,
+                filtered_display_df,
                 width="stretch",
                 hide_index=True,
                 column_config={
@@ -218,6 +236,9 @@ def display_report_data(report_data, report_name="Report"):
                     "Groups": st.column_config.NumberColumn("Groups", width="small"),
                 }
             )
+            
+            if search_text and len(filtered_display_df) < len(display_df):
+                st.caption(f"Showing {len(filtered_display_df)} of {len(display_df)} pages")
             
             st.divider()
             st.subheader("🔍 Page Drill-Down")
@@ -312,8 +333,14 @@ def display_report_data(report_data, report_name="Report"):
         elif has_filters == "Without Filters":
             filtered_df = filtered_df[filtered_df['Visual Filters'].str.len() == 0]
         
+        # Apply global text search filter
+        filtered_df_before_text = filtered_df.copy()
+        filtered_df = filter_dataframe_by_text(filtered_df, search_text)
+        
         st.divider()
         st.markdown(f"**Showing {len(filtered_df)} records**")
+        if search_text and len(filtered_df) < len(filtered_df_before_text):
+            st.caption(f"Text filter reduced from {len(filtered_df_before_text)} to {len(filtered_df)} records")
         
         # Add Suspect for change? flag based on keywords across Field/Query/Title
         def compute_suspect_flag(df: pd.DataFrame) -> pd.DataFrame:
@@ -472,8 +499,14 @@ def display_report_data(report_data, report_name="Report"):
                 (df_filters['Table'].isin(table_filter_options))
             ]
             
+            # Apply global text search filter
+            filtered_filters_df_before_text = filtered_filters_df.copy()
+            filtered_filters_df = filter_dataframe_by_text(filtered_filters_df, search_text)
+            
             st.divider()
             st.markdown(f"**Showing {len(filtered_filters_df)} filters**")
+            if search_text and len(filtered_filters_df) < len(filtered_filters_df_before_text):
+                st.caption(f"Text filter reduced from {len(filtered_filters_df_before_text)} to {len(filtered_filters_df)} filters")
             
             st.dataframe(
                 filtered_filters_df,

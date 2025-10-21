@@ -1,4 +1,6 @@
-from src.constants import POWERBI_TYPE_CODES 
+from src.constants import POWERBI_TYPE_CODES
+import pandas as pd
+
 
 def clean_text(text):
     """
@@ -46,4 +48,35 @@ def get_type_name(type_code):
         String representation of the type
     """
     return POWERBI_TYPE_CODES.get(type_code, f"Type Code {type_code}")
+
+
+def filter_dataframe_by_text(df, search_text):
+    """
+    Filter a DataFrame by searching for text across all columns.
+
+    Args:
+        df: pandas DataFrame to filter
+        search_text: Text to search for (case-insensitive)
+
+    Returns:
+        Filtered DataFrame containing only rows that match the search text
+    """
+    if df is None or df.empty or not search_text or search_text.strip() == "":
+        return df
+    
+    search_text = search_text.strip().lower()
+    
+    # Create a boolean mask for rows containing the search text
+    mask = pd.Series([False] * len(df), index=df.index)
+    
+    # Search across all columns
+    for col in df.columns:
+        try:
+            # Convert column to string and search (case-insensitive)
+            mask |= df[col].astype(str).str.lower().str.contains(search_text, na=False, regex=False)
+        except Exception:
+            # Skip columns that can't be converted or searched
+            continue
+    
+    return df[mask]
 
