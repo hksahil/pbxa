@@ -1,0 +1,12 @@
+# Core dependencies
+streamlit>=1.50.0
+pandas>=2.0.0
+openpyxl>=3.1.5
+lz4>=4.4.4
+
+# PBIX analysis
+pbixray>=0.1.0
+
+# Optional: Enhanced data tables
+streamlit-aggrid>=0.3.0
+

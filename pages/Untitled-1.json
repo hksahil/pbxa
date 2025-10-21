@@ -1,0 +1,237 @@
+{
+    "$id": "756",
+    "Model": {
+        "$ref": "1"
+    },
+    "TableName": "KROGER_FEATURE_EXECUTION_whse",
+    "RowsCount": 930300,
+    "Description": "",
+    "IsReferenced": true,
+    "IsDateTable": false,
+    "Columns": [
+        {
+            "$id": "757",
+            "Table": {
+                "$ref": "756"
+            },
+            "ColumnName": "RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61",
+            "DataType": "Int64",
+            "ColumnType": "RowNumber",
+            "IsHidden": true,
+            "Encoding": "VALUE",
+            "DisplayFolder": "",
+            "FormatString": "",
+            "Description": "",
+            "EncodingHint": "Default",
+            "IsAvailableInMDX": true,
+            "IsKey": true,
+            "IsUnique": true,
+            "State": "Ready",
+            "IsRowNumber": true,
+            "DictionarySize": 128,
+            "DataSize": 128,
+            "TotalSize": 256,
+            "ColumnSegments": [
+                {
+                    "$id": "758",
+                    "Column": {
+                        "$ref": "757"
+                    },
+                    "Partition": {
+                        "$id": "759",
+                        "Table": {
+                            "$ref": "756"
+                        },
+                        "PartitionName": "KROGER_FEATURE_EXECUTION_whse",
+                        "Description": null,
+                        "State": 1,
+                        "Type": 4,
+                        "Mode": 0,
+                        "RefreshedTime": "2025-09-16T02:37:04.533"
+                    },
+                    "SegmentRows": 930300,
+                    "UsedSize": 128,
+                    "CompressionType": "C123",
+                    "VertipaqState": "SKIPPED",
+                    "IsPageable": false,
+                    "IsResident": true
+                }
+            ]
+        },
+        {
+            "$id": "760",
+            "Table": {
+                "$ref": "756"
+            },
+            "ColumnName": "ALERT_DT",
+            "ColumnCardinality": 220,
+            "DataType": "DateTime",
+            "ColumnType": "Data",
+            "Encoding": "HASH",
+            "DisplayFolder": "",
+            "FormatString": "Long Date",
+            "Description": "",
+            "EncodingHint": "Default",
+            "IsNullable": true,
+            "State": "Ready",
+            "DictionarySize": 10176,
+            "DataSize": 930320,
+            "TotalSize": 940496,
+            "Selectivity": 0.000236482854993013,
+            "ColumnSegments": [
+                {
+                    "$id": "761",
+                    "Column": {
+                        "$ref": "760"
+                    },
+                    "Partition": {
+                        "$ref": "759"
+                    },
+                    "SegmentRows": 930300,
+                    "UsedSize": 930320,
+                    "CompressionType": "NOSPLIT",
+                    "BitsCount": 8,
+                    "BookmarkBitsCount": 1,
+                    "VertipaqState": "COMPLETED",
+                    "IsPageable": true,
+                    "IsResident": true,
+                    "Temperature": 0.28197550773620605,
+                    "LastAccessed": "2025-09-16T05:38:49.65"
+                }
+            ]
+        },
+        {
+            "$id": "762",
+            "Table": {
+                "$ref": "756"
+            },
+            "ColumnName": "INV_ONHND_EA_QTY",
+            "ColumnCardinality": 12128,
+            "DataType": "Int64",
+            "ColumnType": "Data",
+            "Encoding": "HASH",
+            "DisplayFolder": "",
+            "FormatString": "\\$#,0.###############;(\\$#,0.###############);\\$#,0.###############",
+            "Description": "",
+            "EncodingHint": "Default",
+            "IsNullable": true,
+            "State": "Ready",
+            "DictionarySize": 311464,
+            "DataSize": 1041792,
+            "TotalSize": 1353256,
+            "Selectivity": 0.013036654842523917,
+            "ColumnSegments": [
+                {
+                    "$id": "763",
+                    "Column": {
+                        "$ref": "762"
+                    },
+                    "Partition": {
+                        "$ref": "759"
+                    },
+                    "SegmentRows": 930300,
+                    "UsedSize": 1041792,
+                    "CompressionType": "NOSPLIT",
+                    "BitsCount": 16,
+                    "BookmarkBitsCount": 546,
+                    "VertipaqState": "COMPLETED",
+                    "IsPageable": true,
+                    "IsResident": true,
+                    "Temperature": 0.28198838233947754,
+                    "LastAccessed": "2025-09-16T05:38:49.68"
+                }
+            ]
+        },
+        {
+            "$id": "764",
+            "Table": {
+                "$ref": "756"
+            },
+            "ColumnName": "EVENT_RNK",
+            "ColumnCardinality": 83,
+            "DataType": "Int64",
+            "ColumnType": "Data",
+            "Encoding": "HASH",
+            "DisplayFolder": "",
+            "FormatString": "0",
+            "Description": "",
+            "EncodingHint": "Default",
+            "IsNullable": true,
+            "State": "Ready",
+            "IsReferenced": true,
+            "DictionarySize": 2644,
+            "DataSize": 599312,
+            "TotalSize": 601956,
+            "Selectivity": 8.92185316564549E-05,
+            "ColumnSegments": [
+                {
+                    "$id": "765",
+                    "Column": {
+                        "$ref": "764"
+                    },
+                    "Partition": {
+                        "$ref": "759"
+                    },
+                    "SegmentRows": 930300,
+                    "UsedSize": 599312,
+                    "CompressionType": "NOSPLIT",
+                    "BitsCount": 7,
+                    "BookmarkBitsCount": 3136,
+                    "VertipaqState": "COMPLETED",
+                    "IsPageable": true,
+                    "IsResident": true,
+                    "Temperature": 0.28199505805969238,
+                    "LastAccessed": "2025-09-16T05:38:49.697"
+                }
+            ]
+        },
+        {
+            "$id": "766",
+            "Table": {
+                "$ref": "756"
+            },
+            "ColumnName": "TYPE_ID",
+            "ColumnCardinality": 132,
+            "DataType": "Int64",
+            "ColumnType": "Data",
+            "Encoding": "HASH",
+            "DisplayFolder": "",
+            "FormatString": "0",
+            "Description": "",
+            "EncodingHint": "Default",
+            "IsNullable": true,
+            "State": "Ready",
+            "IsReferenced": true,
+            "DictionarySize": 2864,
+            "DataSize": 2328,
+            "TotalSize": 5192,
+            "Selectivity": 0.00014188971299580782,
+            "ColumnSegments": [
+                {
+                    "$id": "767",
+                    "Column": {
+                        "$ref": "766"
+                    },
+                    "Partition": {
+                        "$ref": "759"
+                    },
+                    "SegmentRows": 930300,
+                    "UsedSize": 2328,
+                    "CompressionType": "NOSPLIT",
+                    "BitsCount": 8,
+                    "BookmarkBitsCount": 153,
+                    "VertipaqState": "COMPLETED",
+                    "IsPageable": true,
+                    "IsResident": true,
+                    "Temperature": 0.2819819450378418,
+                    "LastAccessed": "2025-09-16T05:38:49.667"
+                }
+            ]
+        }
+    ],
+    "Partitions": [
+        {
+            "$ref": "759"
+        }
+    ]
+}
