@@ -5,7 +5,7 @@ from datetime import datetime
 
 from src.utils import clean_text, get_type_name
 from src.filters import extract_filters, format_filters_for_display
-from src.visuals import parse_visual_containers
+from src.visuals import parse_visual_containers, is_visual_hidden
 
 
 def extract_report_metadata(pbix_file_path):
@@ -244,6 +244,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
                                         "Visual Type": visual_type,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": field["display_name"],
                                         "Field Query Name": field["query_name"],
@@ -273,6 +274,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
                                         "Visual Type": visual_type,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": "",
                                         "Field Query Name": proj["query_ref"],

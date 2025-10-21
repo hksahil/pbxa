@@ -175,7 +175,7 @@ def display_report_data(report_data, report_name="Report"):
         return
     
     # Add global text filter
-    st.markdown("### 🔍 Filter All Data")
+    st.markdown("### Filter All Data")
     search_text = st.text_input(
         "Search across all data in this report:",
         placeholder="Enter text to filter all rows...",
@@ -241,7 +241,7 @@ def display_report_data(report_data, report_name="Report"):
                 st.caption(f"Showing {len(filtered_display_df)} of {len(display_df)} pages")
             
             st.divider()
-            st.subheader("🔍 Page Drill-Down")
+            st.subheader("Page Drill-Down")
             
             selected_page = st.selectbox(
                 "Select a page to view its visuals:",
@@ -408,7 +408,7 @@ def display_report_data(report_data, report_name="Report"):
     
     # TAB 3: FILTERS
     with tab3:
-        st.subheader("🔍 Filter Analysis")
+        st.subheader("Filter Analysis")
         
         filters_data = []
         

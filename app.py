@@ -71,12 +71,27 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
     df_visuals = pd.DataFrame(visuals)
     if not df_visuals.empty and 'Visual ID' in df_visuals.columns:
         total_unique_visuals = df_visuals['Visual ID'].nunique()
-        slicer_mask = df_visuals.get('Visual Type', pd.Series(dtype=str)).astype(str).str.lower() == 'slicer'
-        slicers = df_visuals.loc[slicer_mask, 'Visual ID'].nunique()
-        non_slicer_visuals = total_unique_visuals - slicers
+        
+        # Count slicers - separate direct and indirect
+        direct_slicers = 0
+        indirect_slicers = 0
+        slicer_visuals = df_visuals[df_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
+        if not slicer_visuals.empty:
+            # Direct slicers (not hidden)
+            if 'Hidden' in slicer_visuals.columns:
+                direct_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'No']['Visual ID'].nunique()
+                # Indirect slicers (hidden)
+                indirect_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'Yes']['Visual ID'].nunique()
+            else:
+                # If Hidden column doesn't exist, treat all slicers as direct
+                direct_slicers = slicer_visuals['Visual ID'].nunique()
+        
+        total_slicers = direct_slicers + indirect_slicers
+        non_slicer_visuals = total_unique_visuals - total_slicers
     else:
         non_slicer_visuals = 0
-        slicers = 0
+        direct_slicers = 0
+        indirect_slicers = 0
 
     # Get PBIXRay metrics if model is available
     tables_count = 0
@@ -168,7 +183,8 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
             'Report Name': report_name,
             'Pages': summary.get('Total Pages', 0),
             'Visuals': non_slicer_visuals,
-            'Slicers': slicers,
+            'Direct Slicers': direct_slicers,
+            'Indirect Slicers': indirect_slicers,
             'Static Elements': summary.get('Total Static Elements', 0),
             'Filters': total_filters,
             'Tables': tables_count,
@@ -184,20 +200,32 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
     if not df_pages.empty:
         if not df_visuals.empty and 'Visual ID' in df_visuals.columns:
             visual_ids_by_page = df_visuals.groupby('Page Name')['Visual ID'].nunique()
-            slicers_mask = df_visuals.get('Visual Type', pd.Series(dtype=str)).astype(str).str.lower() == 'slicer'
-            slicers_by_page = df_visuals[slicers_mask].groupby('Page Name')['Visual ID'].nunique()
-            non_slicer_by_page = (visual_ids_by_page - slicers_by_page).fillna(0).astype(int)
+            
+            # Separate direct and indirect slicers by page
+            slicer_visuals = df_visuals[df_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
+            if not slicer_visuals.empty and 'Hidden' in slicer_visuals.columns:
+                direct_slicers_by_page = slicer_visuals[slicer_visuals['Hidden'] == 'No'].groupby('Page Name')['Visual ID'].nunique()
+                indirect_slicers_by_page = slicer_visuals[slicer_visuals['Hidden'] == 'Yes'].groupby('Page Name')['Visual ID'].nunique()
+            else:
+                # If Hidden column doesn't exist, treat all slicers as direct
+                direct_slicers_by_page = slicer_visuals.groupby('Page Name')['Visual ID'].nunique() if not slicer_visuals.empty else pd.Series(dtype=int)
+                indirect_slicers_by_page = pd.Series(dtype=int)
+            
+            total_slicers_by_page = direct_slicers_by_page.add(indirect_slicers_by_page, fill_value=0)
+            non_slicer_by_page = (visual_ids_by_page - total_slicers_by_page).fillna(0).astype(int)
         else:
-            slicers_by_page = pd.Series(dtype=int)
+            direct_slicers_by_page = pd.Series(dtype=int)
+            indirect_slicers_by_page = pd.Series(dtype=int)
             non_slicer_by_page = pd.Series(dtype=int)
 
         df_pages = df_pages.copy()
-        df_pages['Slicers'] = df_pages['Page Name'].map(slicers_by_page).fillna(0).astype(int)
+        df_pages['Direct Slicers'] = df_pages['Page Name'].map(direct_slicers_by_page).fillna(0).astype(int)
+        df_pages['Indirect Slicers'] = df_pages['Page Name'].map(indirect_slicers_by_page).fillna(0).astype(int)
         df_pages['Visual Count(no slicers)'] = df_pages['Page Name'].map(non_slicer_by_page).fillna(0).astype(int)
-        desired_order_pages = ['Page Name', 'All Elements', 'Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups']
+        desired_order_pages = ['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups']
         df_pages_summary = df_pages.reindex(columns=[c for c in desired_order_pages if c in df_pages.columns])
     else:
-        df_pages_summary = pd.DataFrame(columns=['Page Name', 'All Elements', 'Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups'])
+        df_pages_summary = pd.DataFrame(columns=['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups'])
 
     # Visual summary dataframe with Suspect flag
     df_visuals_full = pd.DataFrame(visuals)

@@ -3,6 +3,37 @@ import csv
 
 from src.utils import clean_text, get_type_name
 
+
+def is_visual_hidden(visual):
+    """Check if a visual is hidden"""
+    try:
+        config_str = visual.get("config", "{}")
+        config = json.loads(config_str)
+        single_visual = config.get("singleVisual", {})
+        
+        # Check display mode property
+        display = single_visual.get("display", {})
+        if display:
+            mode = display.get("mode", "")
+            if mode == "hidden":
+                return True
+        
+        # Also check in vcObjects.general for isHidden property (fallback)
+        vc_objects = single_visual.get("vcObjects", {})
+        if "general" in vc_objects:
+            general_settings = vc_objects["general"]
+            if isinstance(general_settings, list) and len(general_settings) > 0:
+                properties = general_settings[0].get("properties", {})
+                if "isHidden" in properties:
+                    is_hidden_expr = properties["isHidden"].get("expr", {})
+                    if "Literal" in is_hidden_expr:
+                        literal_value = is_hidden_expr["Literal"].get("Value", "")
+                        return str(literal_value).lower() == "true"
+        
+        return False
+    except:
+        return False
+
 def parse_visual_containers(layout_json, log_file, csv_file_path):
     """
     Parse visual containers from layout JSON and extract columns and measures used in visuals.
