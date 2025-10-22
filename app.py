@@ -247,6 +247,10 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
         if vf:
             total_filters += len(vf.split(' | '))
 
+    # Bookmarks count (definitions and references)
+    total_bookmarks = sum(p.get('Bookmarks', 0) for p in pages)
+    total_bookmark_references = sum(p.get('Bookmark References', 0) for p in pages)
+
     # Report summary dataframe with requested columns
     report_name = getattr(uploaded_file, 'name', 'Report').replace('.pbix', '')
     df_report_summary = pd.DataFrame([
@@ -261,6 +265,8 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
             'Tables': tables_count,
             'DAX Measures': dax_measures_count,
             'Columns': columns_count,
+            'Bookmarks': total_bookmarks,
+            'Bookmark References': total_bookmark_references,
             'Incremental Refresh?': has_incremental_refresh,
             'Row Level Security': has_row_level_security,
         }
@@ -293,10 +299,10 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
         df_pages['Direct Slicers'] = df_pages['Page Name'].map(direct_slicers_by_page).fillna(0).astype(int)
         df_pages['Indirect Slicers'] = df_pages['Page Name'].map(indirect_slicers_by_page).fillna(0).astype(int)
         df_pages['Visual Count(no slicers)'] = df_pages['Page Name'].map(non_slicer_by_page).fillna(0).astype(int)
-        desired_order_pages = ['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups']
+        desired_order_pages = ['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Bookmarks', 'Bookmark References', 'Page Filters', 'Groups']
         df_pages_summary = df_pages.reindex(columns=[c for c in desired_order_pages if c in df_pages.columns])
     else:
-        df_pages_summary = pd.DataFrame(columns=['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Page Filters', 'Groups'])
+        df_pages_summary = pd.DataFrame(columns=['Page Name', 'All Elements', 'Direct Slicers', 'Indirect Slicers', 'Static Elements', 'Visual Count(no slicers)', 'Bookmarks', 'Bookmark References', 'Page Filters', 'Groups'])
 
     # Visual summary dataframe with Suspect flag
     df_visuals_full = pd.DataFrame(visuals)

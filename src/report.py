@@ -55,6 +55,22 @@ def extract_report_metadata(pbix_file_path):
                 layout_json = json.loads(layout_content)
                 sections = layout_json.get("sections", [])
 
+                # Extract bookmarks from report-level config
+                bookmarks_by_section = {}
+                report_config_str = layout_json.get("config", "{}")
+                try:
+                    report_config = json.loads(report_config_str)
+                    bookmarks = report_config.get("bookmarks", [])
+                    
+                    # Count bookmarks per section
+                    for bookmark in bookmarks:
+                        exploration_state = bookmark.get("explorationState", {})
+                        active_section = exploration_state.get("activeSection", "")
+                        if active_section:
+                            bookmarks_by_section[active_section] = bookmarks_by_section.get(active_section, 0) + 1
+                except json.JSONDecodeError:
+                    pass
+
                 total_visuals = 0
 
                 # Process each page/section
@@ -74,6 +90,7 @@ def extract_report_metadata(pbix_file_path):
                     page_static_elements = 0
                     page_group_containers = 0
                     page_total_containers = len(visual_containers)
+                    page_bookmark_references = 0  # Count visuals referencing bookmarks
 
                     # Detect background image at page level (section config)
                     page_background_images = 0
@@ -101,6 +118,17 @@ def extract_report_metadata(pbix_file_path):
                             visual_type = clean_text(
                                 single_visual.get("visualType", "Unknown")
                             )
+                            
+                            # Check if visual has a bookmark reference
+                            vc_objects = single_visual.get("vcObjects", {})
+                            if vc_objects and "visualLink" in vc_objects:
+                                visual_links = vc_objects["visualLink"]
+                                if isinstance(visual_links, list):
+                                    for link in visual_links:
+                                        props = link.get("properties", {})
+                                        if "bookmark" in props:
+                                            page_bookmark_references += 1
+                                            break
 
                             # Count visual groups as static elements (they wrap other visuals)
                             if "singleVisualGroup" in config:
@@ -150,6 +178,29 @@ def extract_report_metadata(pbix_file_path):
                                                 visual_title = clean_text(
                                                     text_expr["Literal"]
                                                     .get("Value", "[No Title]")
+                                                    .strip("'")
+                                                )
+                                                break
+
+                            # Extract visual header from objects.header
+                            visual_header = ""
+                            objects = single_visual.get("objects", {})
+                            if objects and "header" in objects:
+                                header_settings = objects["header"]
+                                if (
+                                    isinstance(header_settings, list)
+                                    and len(header_settings) > 0
+                                ):
+                                    for header_obj in header_settings:
+                                        properties = header_obj.get("properties", {})
+                                        if "text" in properties:
+                                            text_expr = properties["text"].get(
+                                                "expr", {}
+                                            )
+                                            if "Literal" in text_expr:
+                                                visual_header = clean_text(
+                                                    text_expr["Literal"]
+                                                    .get("Value", "")
                                                     .strip("'")
                                                 )
                                                 break
@@ -243,6 +294,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Visual Header": visual_header,
                                         "Visual Type": visual_type,
                                         "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Filters": visual_filters_display,
@@ -273,6 +325,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Visual Header": visual_header,
                                         "Visual Type": visual_type,
                                         "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Filters": visual_filters_display,
@@ -291,12 +344,17 @@ def extract_report_metadata(pbix_file_path):
                             continue
 
                     # Add page summary
+                    section_name = section.get("name", "")
+                    bookmark_count = bookmarks_by_section.get(section_name, 0)
+                    
                     page_data = {
                         "Page Name": page_name,
                         "Visual Count": page_visuals_with_data,
                         "Static Elements": page_static_elements + page_background_images,
                         "All Elements": page_total_containers + page_background_images,
                         "Groups": page_group_containers,
+                        "Bookmarks": bookmark_count,
+                        "Bookmark References": page_bookmark_references,
                         "Page Filters": page_filters_display
                         if page_filters_display
                         else "None",
