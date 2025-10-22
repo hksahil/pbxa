@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/Users/sahilchoudhary/Desktop/01-Projects/pbi-extractor/neww/evn_name"
+VIRTUAL_ENV="/Users/sahilchoudhary/Desktop/01-Projects/pbi-extractor/pbi-extractor-pbixray/evn_name"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

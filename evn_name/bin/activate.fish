@@ -29,7 +29,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/Users/sahilchoudhary/Desktop/01-Projects/pbi-extractor/neww/evn_name"
+set -gx VIRTUAL_ENV "/Users/sahilchoudhary/Desktop/01-Projects/pbi-extractor/pbi-extractor-pbixray/evn_name"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH
