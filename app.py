@@ -19,16 +19,68 @@ def sizeof_fmt(num, suffix="B"):
         num /= 1024.0
     return f"{num:.1f}Yi{suffix}"
 
-def aggrid_table(df, fit_columns=True):
-    try:
-        from st_aggrid import AgGrid, GridOptionsBuilder
-        gb = GridOptionsBuilder.from_dataframe(df)
-        gb.configure_default_column(groupable=True, enableRowGroup=True, aggFunc="sum", editable=False)
-        gb.configure_side_bar()
-        gridOptions = gb.build()
-        AgGrid(df, gridOptions=gridOptions, fit_columns_on_grid_load=fit_columns)
-    except ImportError:
-        st.dataframe(df)
+def display_filterable_dataframe(df, key=None, hide_index=True, use_container_width=True):
+    """
+    Display a DataFrame with enhanced column filtering capabilities.
+    
+    Args:
+        df: pandas DataFrame to display
+        key: Unique key for the dataframe widget
+        hide_index: Whether to hide the index column
+        use_container_width: Whether to use full container width
+    """
+    if df is None or df.empty:
+        return
+    
+    # Create an expander for column filters
+    with st.expander("🔧 Column Filters", expanded=False):
+        # Create multiselect filters for each column
+        filtered_df = df.copy()
+        
+        # Create columns for filter layout (3 filters per row)
+        num_cols = len(df.columns)
+        cols_per_row = 3
+        
+        for i in range(0, num_cols, cols_per_row):
+            filter_cols = st.columns(cols_per_row)
+            
+            for j, col_name in enumerate(df.columns[i:i+cols_per_row]):
+                with filter_cols[j]:
+                    # Get unique values for the column (limit to prevent performance issues)
+                    unique_values = df[col_name].astype(str).unique()
+                    
+                    # Limit the number of unique values shown in filter
+                    if len(unique_values) > 100:
+                        st.caption(f"**{col_name}** (too many values to filter)")
+                    else:
+                        # Sort unique values
+                        unique_values_sorted = sorted(unique_values)
+                        
+                        # Create multiselect filter
+                        selected_values = st.multiselect(
+                            f"Filter {col_name}",
+                            options=unique_values_sorted,
+                            default=None,
+                            key=f"{key}_{col_name}_filter" if key else None,
+                            label_visibility="collapsed",
+                            placeholder=f"Filter {col_name}..."
+                        )
+                        
+                        # Apply filter if values are selected
+                        if selected_values:
+                            filtered_df = filtered_df[filtered_df[col_name].astype(str).isin(selected_values)]
+        
+        # Show filter results summary
+        if len(filtered_df) < len(df):
+            st.info(f"📊 Showing {len(filtered_df)} of {len(df)} rows after column filtering")
+    
+    # Display the filtered dataframe
+    st.dataframe(
+        filtered_df,
+        hide_index=hide_index,
+        use_container_width=use_container_width,
+        key=f"{key}_display" if key else None
+    )
 
 def compute_suspect_flag_export(df: pd.DataFrame) -> pd.DataFrame:
     keywords = [
@@ -49,6 +101,25 @@ def compute_suspect_flag_export(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if not df.empty:
         df['Suspect for change?'] = df.apply(row_flag, axis=1)
+    return df
+
+
+def append_report_name_to_df(df, report_name):
+    """
+    Add Report Name column as the first column in a DataFrame.
+    
+    Args:
+        df: pandas DataFrame to modify
+        report_name: Name of the report to add
+        
+    Returns:
+        DataFrame with Report Name column added
+    """
+    if df is None or df.empty:
+        return df
+    
+    df = df.copy()
+    df.insert(0, 'Report Name', report_name)
     return df
 
 
@@ -258,6 +329,331 @@ def build_report_summaries(uploaded_file, model=None) -> dict:
     }
 
 
+def process_multiple_files(uploaded_files):
+    """
+    Process multiple PBIX files and aggregate all results.
+    
+    Args:
+        uploaded_files: List of uploaded PBIX files
+    """
+    st.info(f"Processing {len(uploaded_files)} PBIX files...")
+    
+    # Initialize aggregated dataframes
+    all_report_summaries = []
+    all_page_summaries = []
+    all_visual_summaries = []
+    all_table_analysis = []
+    all_relationships = []
+    all_columns = []
+    all_m_parameters = []
+    all_dax_tables = []
+    all_calculated_columns = []
+    all_dax_measures = []
+    all_rls = []
+    
+    # Process each file with progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for idx, uploaded_file in enumerate(uploaded_files):
+        report_name = uploaded_file.name.replace('.pbix', '')
+        status_text.text(f"Processing: {report_name} ({idx + 1}/{len(uploaded_files)})")
+        
+        try:
+            # Rewind file pointer
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+            
+            # Initialize model
+            model = None
+            if PBIXRay is not None:
+                try:
+                    model = PBIXRay(uploaded_file)
+                except Exception as e:
+                    st.warning(f"PBIXRay failed for {report_name}: {str(e)}")
+            
+            # Get report summaries
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+            
+            summaries = build_report_summaries(uploaded_file, model)
+            
+            # Append report summary
+            if summaries and 'report_summary' in summaries and not summaries['report_summary'].empty:
+                all_report_summaries.append(summaries['report_summary'])
+            
+            # Append page summary
+            if summaries and 'page_summary' in summaries and not summaries['page_summary'].empty:
+                df_page = append_report_name_to_df(summaries['page_summary'], report_name)
+                all_page_summaries.append(df_page)
+            
+            # Append visual summary
+            if summaries and 'visual_summary' in summaries and not summaries['visual_summary'].empty:
+                df_visual = append_report_name_to_df(summaries['visual_summary'], report_name)
+                all_visual_summaries.append(df_visual)
+            
+            # Append model data
+            if model is not None:
+                try:
+                    power_query = getattr(model, 'power_query', pd.DataFrame())
+                    if not power_query.empty:
+                        df_pq = append_report_name_to_df(power_query, report_name)
+                        all_table_analysis.append(df_pq)
+                except Exception:
+                    pass
+                
+                try:
+                    relationships = getattr(model, 'relationships', pd.DataFrame())
+                    if not relationships.empty:
+                        df_rel = append_report_name_to_df(relationships, report_name)
+                        all_relationships.append(df_rel)
+                except Exception:
+                    pass
+                
+                try:
+                    statistics_df = getattr(model, 'statistics', pd.DataFrame())
+                    if not statistics_df.empty:
+                        df_stats = append_report_name_to_df(statistics_df, report_name)
+                        all_columns.append(df_stats)
+                except Exception:
+                    pass
+                
+                try:
+                    m_parameters = getattr(model, 'm_parameters', pd.DataFrame())
+                    if not m_parameters.empty:
+                        df_m = append_report_name_to_df(m_parameters, report_name)
+                        all_m_parameters.append(df_m)
+                except Exception:
+                    pass
+                
+                try:
+                    dax_tables = getattr(model, 'dax_tables', pd.DataFrame())
+                    if not dax_tables.empty:
+                        df_dax_t = append_report_name_to_df(dax_tables, report_name)
+                        all_dax_tables.append(df_dax_t)
+                except Exception:
+                    pass
+                
+                try:
+                    calculated_cols = None
+                    for attr_name in ['calculated_columns', 'dax_columns', 'columns', 'dax_columns_df']:
+                        if hasattr(model, attr_name):
+                            attr_data = getattr(model, attr_name)
+                            if hasattr(attr_data, 'size') and attr_data.size > 0:
+                                calculated_cols = attr_data
+                                break
+                    
+                    if calculated_cols is not None and not calculated_cols.empty:
+                        df_calc = append_report_name_to_df(calculated_cols, report_name)
+                        all_calculated_columns.append(df_calc)
+                except Exception:
+                    pass
+                
+                try:
+                    dax_measures = getattr(model, 'dax_measures', pd.DataFrame())
+                    if not dax_measures.empty:
+                        df_dax_m = append_report_name_to_df(dax_measures, report_name)
+                        all_dax_measures.append(df_dax_m)
+                except Exception:
+                    pass
+                
+                try:
+                    rls_df = getattr(model, 'rls', pd.DataFrame())
+                    if not rls_df.empty:
+                        df_rls = append_report_name_to_df(rls_df, report_name)
+                        all_rls.append(df_rls)
+                except Exception:
+                    pass
+        
+        except Exception as e:
+            st.error(f"Error processing {report_name}: {str(e)}")
+        
+        # Update progress
+        progress_bar.progress((idx + 1) / len(uploaded_files))
+    
+    status_text.text("✅ All files processed!")
+    st.success(f"Successfully processed {len(uploaded_files)} PBIX files")
+    
+    # Combine all dataframes and store in session state
+    st.session_state.multi_combined_report_summary = pd.concat(all_report_summaries, ignore_index=True) if all_report_summaries else pd.DataFrame()
+    st.session_state.multi_combined_page_summary = pd.concat(all_page_summaries, ignore_index=True) if all_page_summaries else pd.DataFrame()
+    st.session_state.multi_combined_visual_summary = pd.concat(all_visual_summaries, ignore_index=True) if all_visual_summaries else pd.DataFrame()
+    st.session_state.multi_combined_table_analysis = pd.concat(all_table_analysis, ignore_index=True) if all_table_analysis else pd.DataFrame()
+    st.session_state.multi_combined_relationships = pd.concat(all_relationships, ignore_index=True) if all_relationships else pd.DataFrame()
+    st.session_state.multi_combined_columns = pd.concat(all_columns, ignore_index=True) if all_columns else pd.DataFrame()
+    st.session_state.multi_combined_m_parameters = pd.concat(all_m_parameters, ignore_index=True) if all_m_parameters else pd.DataFrame()
+    st.session_state.multi_combined_dax_tables = pd.concat(all_dax_tables, ignore_index=True) if all_dax_tables else pd.DataFrame()
+    st.session_state.multi_combined_calculated_columns = pd.concat(all_calculated_columns, ignore_index=True) if all_calculated_columns else pd.DataFrame()
+    st.session_state.multi_combined_dax_measures = pd.concat(all_dax_measures, ignore_index=True) if all_dax_measures else pd.DataFrame()
+    st.session_state.multi_combined_rls = pd.concat(all_rls, ignore_index=True) if all_rls else pd.DataFrame()
+    st.session_state.multi_num_files = len(uploaded_files)
+    
+
+
+def display_multi_file_results():
+    """
+    Display the aggregated results from multi-file processing (stored in session state).
+    """
+    # Get data from session state
+    combined_report_summary = st.session_state.get('multi_combined_report_summary', pd.DataFrame())
+    combined_page_summary = st.session_state.get('multi_combined_page_summary', pd.DataFrame())
+    combined_visual_summary = st.session_state.get('multi_combined_visual_summary', pd.DataFrame())
+    combined_table_analysis = st.session_state.get('multi_combined_table_analysis', pd.DataFrame())
+    combined_relationships = st.session_state.get('multi_combined_relationships', pd.DataFrame())
+    combined_columns = st.session_state.get('multi_combined_columns', pd.DataFrame())
+    combined_m_parameters = st.session_state.get('multi_combined_m_parameters', pd.DataFrame())
+    combined_dax_tables = st.session_state.get('multi_combined_dax_tables', pd.DataFrame())
+    combined_calculated_columns = st.session_state.get('multi_combined_calculated_columns', pd.DataFrame())
+    combined_dax_measures = st.session_state.get('multi_combined_dax_measures', pd.DataFrame())
+    combined_rls = st.session_state.get('multi_combined_rls', pd.DataFrame())
+    num_files = st.session_state.get('multi_num_files', 0)
+    
+    # Display aggregated results
+    st.divider()
+    st.header("📊 Aggregated Analysis Results")
+    
+    # 1. Report Summary (first) - NO FILTERING
+    st.subheader("Report Summary")
+    if not combined_report_summary.empty:
+        display_filterable_dataframe(combined_report_summary, key="multi_report_summary", hide_index=True)
+    else:
+        st.info("No report summary data available.")
+    
+    # Add global text filter
+    st.divider()
+    st.markdown("### 🔍 Filter All Tables Below")
+    search_text = st.text_input(
+        "Search across all aggregated tables:",
+        placeholder="Enter text to filter all rows in tables below...",
+        help="This will filter all tables below based on your search text (case-insensitive)",
+        key="multi_search_text"
+    )
+    
+    if search_text:
+        st.info(f"🔎 Filtering all tables below for: '{search_text}'")
+    
+    st.divider()
+    
+    # 2. Table Analysis
+    if not combined_table_analysis.empty:
+        st.subheader("Table Analysis (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_table_analysis, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_table_analysis")
+        if search_text and len(filtered_df) < len(combined_table_analysis):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_table_analysis)} rows")
+    
+    # 3. Relationship Analysis
+    if not combined_relationships.empty:
+        st.subheader("Relationships Analysis (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_relationships, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_relationships")
+        if search_text and len(filtered_df) < len(combined_relationships):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_relationships)} rows")
+    
+    # 4. Column Analysis
+    if not combined_columns.empty:
+        st.subheader("Column Analysis (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_columns, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_columns")
+        if search_text and len(filtered_df) < len(combined_columns):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_columns)} rows")
+    
+    # 5. M Parameters
+    if not combined_m_parameters.empty:
+        st.subheader("M Parameters (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_m_parameters, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_m_parameters")
+        if search_text and len(filtered_df) < len(combined_m_parameters):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_m_parameters)} rows")
+    
+    # 6. DAX Tables
+    if not combined_dax_tables.empty:
+        st.subheader("DAX Tables (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_dax_tables, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_dax_tables")
+        if search_text and len(filtered_df) < len(combined_dax_tables):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_dax_tables)} rows")
+    
+    # 7. Calculated Columns
+    if not combined_calculated_columns.empty:
+        st.subheader("Calculated Columns (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_calculated_columns, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_calculated_columns")
+        if search_text and len(filtered_df) < len(combined_calculated_columns):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_calculated_columns)} rows")
+    
+    # 8. DAX Measures
+    if not combined_dax_measures.empty:
+        st.subheader("DAX Measures (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_dax_measures, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_dax_measures")
+        if search_text and len(filtered_df) < len(combined_dax_measures):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_dax_measures)} rows")
+    
+    # 9. Page Summary
+    if not combined_page_summary.empty:
+        st.subheader("Page Summary (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_page_summary, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_page_summary", hide_index=True)
+        if search_text and len(filtered_df) < len(combined_page_summary):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_page_summary)} rows")
+    
+    # 10. Visual Summary
+    if not combined_visual_summary.empty:
+        st.subheader("Visual Summary (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_visual_summary, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_visual_summary", hide_index=True)
+        if search_text and len(filtered_df) < len(combined_visual_summary):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_visual_summary)} rows")
+    
+    # 11. Row-Level Security
+    if not combined_rls.empty:
+        st.subheader("Row-Level Security (All Reports)")
+        filtered_df = filter_dataframe_by_text(combined_rls, search_text)
+        display_filterable_dataframe(filtered_df, key="multi_rls", hide_index=True)
+        if search_text and len(filtered_df) < len(combined_rls):
+            st.caption(f"Showing {len(filtered_df)} of {len(combined_rls)} rows")
+    
+    # Export All Aggregated Data
+    st.divider()
+    export_buffer = io.BytesIO()
+    
+    with pd.ExcelWriter(export_buffer, engine='openpyxl') as writer:
+        if not combined_report_summary.empty:
+            combined_report_summary.to_excel(writer, index=False, sheet_name='Report Summary')
+        if not combined_table_analysis.empty:
+            combined_table_analysis.to_excel(writer, index=False, sheet_name='Table Analysis')
+        if not combined_relationships.empty:
+            combined_relationships.to_excel(writer, index=False, sheet_name='Relationships Analysis')
+        if not combined_columns.empty:
+            combined_columns.to_excel(writer, index=False, sheet_name='Columns Analysis')
+        if not combined_m_parameters.empty:
+            combined_m_parameters.to_excel(writer, index=False, sheet_name='M Parameters')
+        if not combined_dax_tables.empty:
+            combined_dax_tables.to_excel(writer, index=False, sheet_name='DAX Tables')
+        if not combined_calculated_columns.empty:
+            combined_calculated_columns.to_excel(writer, index=False, sheet_name='Calculated Columns')
+        if not combined_dax_measures.empty:
+            combined_dax_measures.to_excel(writer, index=False, sheet_name='DAX Measures')
+        if not combined_page_summary.empty:
+            combined_page_summary.to_excel(writer, index=False, sheet_name='Page Summary')
+        if not combined_visual_summary.empty:
+            combined_visual_summary.to_excel(writer, index=False, sheet_name='Visual Summary')
+        if not combined_rls.empty:
+            combined_rls.to_excel(writer, index=False, sheet_name='Row-Level Security')
+    
+    st.download_button(
+        label="📥 Download Aggregated Analysis (Excel)",
+        data=export_buffer.getvalue(),
+        file_name=f"multi_pbix_analysis_{num_files}_files.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 def process_single_file(uploaded_file):
     model = None
     if PBIXRay is not None:
@@ -269,7 +665,7 @@ def process_single_file(uploaded_file):
     st.subheader("Report Summary")
     summaries = build_report_summaries(uploaded_file, model)
     if summaries:
-        st.dataframe(summaries['report_summary'], hide_index=True, width="stretch")
+        display_filterable_dataframe(summaries['report_summary'], key="single_report_summary", hide_index=True)
     else:
         st.info("Could not extract report summary from the PBIX file.")
 
@@ -293,7 +689,7 @@ def process_single_file(uploaded_file):
             if getattr(model, 'power_query', pd.DataFrame()).size:
                 st.subheader("Table Analysis")
                 filtered_df = filter_dataframe_by_text(model.power_query, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_table_analysis")
                 if search_text and len(filtered_df) < len(model.power_query):
                     st.caption(f"Showing {len(filtered_df)} of {len(model.power_query)} rows")
             else:
@@ -307,7 +703,7 @@ def process_single_file(uploaded_file):
             if getattr(model, 'relationships', pd.DataFrame()).size:
                 st.subheader("Relationships Analysis")
                 filtered_df = filter_dataframe_by_text(model.relationships, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_relationships")
                 if search_text and len(filtered_df) < len(model.relationships):
                     st.caption(f"Showing {len(filtered_df)} of {len(model.relationships)} rows")
             else:
@@ -321,7 +717,7 @@ def process_single_file(uploaded_file):
             st.subheader("Column Analysis")
             statistics_df = getattr(model, 'statistics', pd.DataFrame())
             filtered_df = filter_dataframe_by_text(statistics_df, search_text)
-            st.dataframe(filtered_df)
+            display_filterable_dataframe(filtered_df, key="single_columns")
             if search_text and len(filtered_df) < len(statistics_df):
                 st.caption(f"Showing {len(filtered_df)} of {len(statistics_df)} rows")
         except Exception:
@@ -333,7 +729,7 @@ def process_single_file(uploaded_file):
             if getattr(model, 'm_parameters', pd.DataFrame()).size:
                 st.subheader("M Parameters")
                 filtered_df = filter_dataframe_by_text(model.m_parameters, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_m_parameters")
                 if search_text and len(filtered_df) < len(model.m_parameters):
                     st.caption(f"Showing {len(filtered_df)} of {len(model.m_parameters)} rows")
             else:
@@ -347,7 +743,7 @@ def process_single_file(uploaded_file):
             if getattr(model, 'dax_tables', pd.DataFrame()).size:
                 st.subheader("DAX Tables")
                 filtered_df = filter_dataframe_by_text(model.dax_tables, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_dax_tables")
                 if search_text and len(filtered_df) < len(model.dax_tables):
                     st.caption(f"Showing {len(filtered_df)} of {len(model.dax_tables)} rows")
             else:
@@ -370,7 +766,7 @@ def process_single_file(uploaded_file):
             if calculated_cols is not None and calculated_cols.size > 0:
                 st.subheader("Calculated Columns")
                 filtered_df = filter_dataframe_by_text(calculated_cols, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_calculated_columns")
                 if search_text and len(filtered_df) < len(calculated_cols):
                     st.caption(f"Showing {len(filtered_df)} of {len(calculated_cols)} rows")
             else:
@@ -384,7 +780,7 @@ def process_single_file(uploaded_file):
             if getattr(model, 'dax_measures', pd.DataFrame()).size:
                 st.subheader("DAX Measures")
                 filtered_df = filter_dataframe_by_text(model.dax_measures, search_text)
-                st.dataframe(filtered_df)
+                display_filterable_dataframe(filtered_df, key="single_dax_measures")
                 if search_text and len(filtered_df) < len(model.dax_measures):
                     st.caption(f"Showing {len(filtered_df)} of {len(model.dax_measures)} rows")
             else:
@@ -396,7 +792,7 @@ def process_single_file(uploaded_file):
     if summaries:
         st.subheader("Page Summary")
         filtered_df = filter_dataframe_by_text(summaries['page_summary'], search_text)
-        st.dataframe(filtered_df, hide_index=True, width="stretch")
+        display_filterable_dataframe(filtered_df, key="single_page_summary", hide_index=True)
         if search_text and len(filtered_df) < len(summaries['page_summary']):
             st.caption(f"Showing {len(filtered_df)} of {len(summaries['page_summary'])} rows")
 
@@ -404,7 +800,7 @@ def process_single_file(uploaded_file):
     if summaries:
         st.subheader("Visual Summary")
         filtered_df = filter_dataframe_by_text(summaries['visual_summary'], search_text)
-        st.dataframe(filtered_df, hide_index=True, width="stretch")
+        display_filterable_dataframe(filtered_df, key="single_visual_summary", hide_index=True)
         if search_text and len(filtered_df) < len(summaries['visual_summary']):
             st.caption(f"Showing {len(filtered_df)} of {len(summaries['visual_summary'])} rows")
 
@@ -415,7 +811,7 @@ def process_single_file(uploaded_file):
             if not rls_df.empty:
                 st.subheader("Row-Level Security (RLS)")
                 filtered_df = filter_dataframe_by_text(rls_df, search_text)
-                st.dataframe(filtered_df, hide_index=True, width="stretch")
+                display_filterable_dataframe(filtered_df, key="single_rls", hide_index=True)
                 if search_text and len(filtered_df) < len(rls_df):
                     st.caption(f"Showing {len(filtered_df)} of {len(rls_df)} rows")
             else:
@@ -531,9 +927,79 @@ def process_single_file(uploaded_file):
 # Main app
 st.title("📊 PBIX Analyser for Reckitt")
 
-uploaded_file = st.file_uploader("📁 Upload a PBIX file", type="pbix")
+# Add analysis mode selector
+analysis_mode = st.radio(
+    "Select Analysis Mode:",
+    options=["Single File Analysis", "Multi-File Analysis"],
+    horizontal=True,
+    help="Choose whether to analyze one PBIX file or multiple PBIX files at once"
+)
 
-if uploaded_file:
-    process_single_file(uploaded_file)
-else:
-    st.info("Upload a PBIX file to get started.")
+st.divider()
+
+if analysis_mode == "Single File Analysis":
+    uploaded_file = st.file_uploader("📁 Upload a PBIX file", type="pbix")
+    
+    if uploaded_file:
+        process_single_file(uploaded_file)
+    else:
+        st.info("Upload a PBIX file to get started.")
+        
+else:  # Multi-File Analysis
+    uploaded_files = st.file_uploader(
+        "📁 Upload multiple PBIX files",
+        type="pbix",
+        accept_multiple_files=True,
+        help="Select multiple PBIX files to analyze them together"
+    )
+    
+    # Check if new files were uploaded (different from processed files)
+    uploaded_file_names = [f.name for f in uploaded_files] if uploaded_files else []
+    processed_file_names = st.session_state.get('multi_processed_file_names', [])
+    files_changed = uploaded_file_names != processed_file_names
+    
+    # Clear session state if files changed
+    if files_changed and 'multi_combined_report_summary' in st.session_state:
+        # Clear all multi-file session state
+        for key in list(st.session_state.keys()):
+            if key.startswith('multi_'):
+                del st.session_state[key]
+    
+    if uploaded_files and len(uploaded_files) > 0:
+        st.info(f"✅ {len(uploaded_files)} file(s) selected")
+        
+        # Show selected files
+        with st.expander("View selected files"):
+            for i, f in enumerate(uploaded_files, 1):
+                st.write(f"{i}. {f.name}")
+        
+        st.divider()
+        
+        # Check if we have processed results in session state
+        has_results = 'multi_combined_report_summary' in st.session_state
+        
+        # Show different UI based on whether results exist
+        if not has_results:
+            # Add a button to start processing
+            if st.button("🚀 Start Batch Processing", type="primary"):
+                process_multiple_files(uploaded_files)
+                # Store processed file names
+                st.session_state.multi_processed_file_names = uploaded_file_names
+                st.rerun()
+        else:
+            # Show results and option to reprocess
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.success(f"Results ready! Showing analysis for {len(uploaded_files)} files.")
+            with col2:
+                if st.button("🔄 Reprocess Files"):
+                    # Clear session state
+                    for key in list(st.session_state.keys()):
+                        if key.startswith('multi_'):
+                            del st.session_state[key]
+                    st.rerun()
+            
+            # Display the results
+            display_multi_file_results()
+    else:
+        st.info("Upload multiple PBIX files to get started with batch analysis.")
